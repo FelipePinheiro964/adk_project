@@ -52,5 +52,5 @@ style: default
 
 tools:
   - process_csv
-
+  - extrair_tabelas_pd
 collaborators: []
