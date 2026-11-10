@@ -47,10 +47,16 @@ instructions: |
   - Interpret the user's request and map it to the correct tool parameters.
   - If no file is attached, ask the user to upload one.
 
+  Quando o usuário enviar um PDF, chame tabelas_pdf ou o extrair_tabelas_pdf na mesma resposta, sem pedir o arquivo de novo.
+  Use juntar=true só se o usuário pedir para unir/juntar tabelas.
+  Use nome_base com o assunto do documento, se o usuário informar.
+  Depois, avise que o ZIP tem os CSVs e o analise_geral.md.
+
 llm: groq/openai/gpt-oss-120b 
 style: default
 
 tools:
   - process_csv
-  - extrair_tabelas_pd
+  - extrair_tabelas_pdf
+  - processar_pdf_tabelas
 collaborators: []

@@ -1,6 +1,5 @@
 
 import pandas as pd
-import requests
 import io
 
 from ibm_watsonx_orchestrate.agent_builder.tools import tool
@@ -8,13 +7,10 @@ from ibm_watsonx_orchestrate.agent_builder.tools import tool
 
 @tool(
     name="process_csv",
-    description=(
-        "Reads a CSV file and displays, filters or sorts its records "
-        "according to the user's request."
-    )
+    description="Reads, filters and sorts CSV files uploaded by the user."
 )
 def process_csv(
-    file_path: str,
+    file_bytes: bytes,
     operation: str = "read",
     column: str = "",
     order: str = "asc",
@@ -22,64 +18,43 @@ def process_csv(
     filter_value: str = "",
     filter_operator: str = "equals"
 ) -> str:
-    """
-    Reads and processes a CSV file.
-
+    """Processes an uploaded CSV file.
     Args:
-        file_path: Signed URL of the uploaded CSV file.
-        operation: Operation to perform: read, sort or filter.
+        file_bytes: Binary content of the uploaded CSV.
+        operation: read, sort or filter.
         column: Column used for sorting or filtering.
-        order: Sort direction: asc or desc.
+        order: asc or desc.
         limit: Maximum number of rows to display.
-        filter_value: Value used to filter records.
+        filter_value: Value used for filtering.
         filter_operator: equals, contains, greater_than or less_than.
-
     Returns:
-        A text report containing the requested CSV records.
+        str: Processed CSV records.
     """
-
     try:
-        response = requests.get(file_path, timeout=30)
-        response.raise_for_status()
-
-        try:
-            df = pd.read_csv(
-                io.BytesIO(response.content),
-                sep=None,
-                engine="python",
-                encoding="utf-8-sig"
-            )
-        except UnicodeDecodeError:
-            df = pd.read_csv(
-                io.BytesIO(response.content),
-                sep=None,
-                engine="python",
-                encoding="latin-1"
-            )
+        df = pd.read_csv(
+            io.BytesIO(file_bytes),
+            sep=None,
+            engine="python",
+            encoding="utf-8-sig"
+        )
 
         df.columns = df.columns.str.strip()
-
-        if df.empty:
-            return "The CSV file contains no records."
 
         original_count = len(df)
 
         if operation == "sort":
             if column not in df.columns:
-                return f"Column '{column}' was not found. Available columns: {list(df.columns)}"
+                return f"Column not found. Available: {list(df.columns)}"
 
             df = df.sort_values(
                 by=column,
-                ascending=(order.lower() == "asc"),
+                ascending=order.lower() == "asc",
                 na_position="last"
             )
 
         elif operation == "filter":
             if column not in df.columns:
-                return f"Column '{column}' was not found. Available columns: {list(df.columns)}"
-
-            if not filter_value:
-                return "Please provide a value to filter."
+                return f"Column not found. Available: {list(df.columns)}"
 
             values = df[column]
 
@@ -88,48 +63,42 @@ def process_csv(
 
             elif filter_operator == "contains":
                 mask = values.astype(str).str.contains(
-                    filter_value,
-                    case=False,
-                    na=False,
-                    regex=False
+                    filter_value, case=False, na=False, regex=False
                 )
 
-            elif filter_operator in ["greater_than", "less_than"]:
-                numeric_values = pd.to_numeric(values, errors="coerce")
+            elif filter_operator in ("greater_than", "less_than"):
+                numeric = pd.to_numeric(values, errors="coerce")
+                target = float(filter_value)
 
-                try:
-                    target = float(filter_value)
-                except ValueError:
-                    return "This filter operator requires a numeric value."
-
-                if filter_operator == "greater_than":
-                    mask = numeric_values > target
-                else:
-                    mask = numeric_values < target
-
+                mask = (
+                    numeric > target
+                    if filter_operator == "greater_than"
+                    else numeric < target
+                )
             else:
                 return "Unsupported filter operator."
 
             df = df[mask]
 
         elif operation != "read":
-            return "Unsupported operation. Use read, sort or filter."
+            return "Unsupported operation."
 
         if limit < 1:
-            return "The limit must be greater than zero."
+            return "Limit must be greater than zero."
 
         result = df.head(min(limit, 100))
 
         if result.empty:
-            return "No records matched your request."
+            return "No records found."
 
         return (
-            f"Total original records: {original_count}\n"
+            f"Original records: {original_count}\n"
             f"Records after processing: {len(df)}\n"
-            f"Records displayed: {len(result)}\n\n"
-            f"Columns: {', '.join(df.columns)}\n\n"
+            f"Displayed records: {len(result)}\n\n"
             f"{result.to_string(index=False)}"
         )
 
+    except UnicodeDecodeError:
+        return "Could not decode the CSV. Check its encoding."
     except Exception as error:
-        return f"Error processing CSV: {str(error)}"
+        return f"CSV processing error: {str(error)}"

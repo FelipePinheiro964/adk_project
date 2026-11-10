@@ -1,0 +1,6 @@
+pdfplumber
+pandas
+requests
+unicodedata
+zipfile
+tabulate
