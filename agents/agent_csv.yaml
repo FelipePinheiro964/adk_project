@@ -41,6 +41,7 @@ instructions: |
 
 tools:
   - process_csv
+  - csv_chart
 context_access_enabled: true
 
 context_variables:
